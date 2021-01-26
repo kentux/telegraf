@@ -16,54 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMoveCSVFileToImport(t *testing.T) {
-	acc := testutil.Accumulator{}
-	wd, err := os.Getwd()
-	require.NoError(t, err)
-	testFile := "colors.csv"
-
-	// Establish process directory and finished directory.
-	finishedDirectory := filepath.Join(wd, "testfiles/finished")
-	processDirectory := filepath.Join(wd, "testfiles")
-	require.NoError(t, err)
-	defer os.Remove(processDirectory)
-
-	// Init plugin.
-	r := DirectoryMonitor{
-		Directory:          processDirectory,
-		FinishedDirectory:  finishedDirectory,
-		MaxBufferedMetrics: 1000,
-	}
-	r.Log = testutil.Logger{}
-	err = r.Init()
-	require.NoError(t, err)
-
-	parserConfig := parsers.Config{
-		DataFormat:        "csv",
-		CSVHeaderRowCount: 1,
-	}
-	nParser, err := parsers.NewParser(&parserConfig)
-	require.NoError(t, err)
-	r.parser = nParser
-
-	r.Start(&acc)
-	require.NoError(t, err)
-
-	// Move file to process into the 'process' directory.
-	os.Rename(filepath.Join(finishedDirectory, testFile), filepath.Join(processDirectory, testFile))
-
-	// Ensure that a stop event still allows for the file that's already processing to finish.
-	r.Stop()
-	time.Sleep(10 * time.Millisecond)
-
-	// Verify that we read the CSV once.
-	require.Equal(t, len(acc.Metrics), 2)
-
-	// File should have been moved back to the test directory, as we configured.
-	_, err = os.Stat(filepath.Join(finishedDirectory, testFile))
-	require.NoError(t, err)
-}
-
 func TestCSVAddedLive(t *testing.T) {
 	acc := testutil.Accumulator{}
 	wd, err := os.Getwd()
@@ -71,8 +23,8 @@ func TestCSVAddedLive(t *testing.T) {
 	testFile := "test.csv"
 
 	// Establish process directory and finished directory.
-	finishedDirectory := filepath.Join(wd, "testfiles/finished")
-	processDirectory := filepath.Join(wd, "testfiles")
+	finishedDirectory, _ := ioutil.TempDir(wd, "finished")
+	processDirectory, _ := ioutil.TempDir(wd, "test")
 	require.NoError(t, err)
 	defer os.Remove(processDirectory)
 
@@ -103,7 +55,7 @@ func TestCSVAddedLive(t *testing.T) {
 	require.NoError(t, err)
 	f.WriteString("thing,color\nsky,blue\ngrass,green\nclifford,red\n")
 	f.Close()
-	defer os.Remove(filepath.Join(finishedDirectory, testFile))
+	defer os.RemoveAll(finishedDirectory)
 
 	require.NoError(t, err)
 	time.Sleep(50 * time.Millisecond)
@@ -123,8 +75,8 @@ func TestGZFileImport(t *testing.T) {
 	testFile := "test.csv.gz"
 
 	// Establish process directory and finished directory.
-	finishedDirectory := filepath.Join(wd, "testfiles/finished")
-	processDirectory := filepath.Join(wd, "testfiles")
+	finishedDirectory, _ := ioutil.TempDir(wd, "finished")
+	processDirectory, _ := ioutil.TempDir(wd, "test")
 	require.NoError(t, err)
 	defer os.Remove(processDirectory)
 
@@ -158,7 +110,7 @@ func TestGZFileImport(t *testing.T) {
 	w.Write([]byte("thing,color\nsky,blue\ngrass,green\nclifford,red\n"))
 	w.Close()
 	err = ioutil.WriteFile(testFileName, b.Bytes(), 0666)
-	defer os.Remove(filepath.Join(finishedDirectory, testFile))
+	defer os.RemoveAll(finishedDirectory)
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -183,10 +135,11 @@ func TestMultipleJSONFileImports(t *testing.T) {
 	require.NoError(t, err)
 
 	// Establish process directory and finished directory.
-	finishedDirectory := filepath.Join(wd, "testfiles/finished")
-	processDirectory := filepath.Join(wd, "testfiles")
+	finishedDirectory, _ := ioutil.TempDir(wd, "finished")
+	processDirectory, _ := ioutil.TempDir(wd, "test")
 	require.NoError(t, err)
 	defer os.Remove(processDirectory)
+	defer os.RemoveAll(finishedDirectory)
 
 	// Init plugin.
 	r := DirectoryMonitor{
@@ -238,7 +191,6 @@ func TestMultipleJSONFileImports(t *testing.T) {
 
 	for count, data := range fileData {
 		writeJSONFile(data, filepath.Join(processDirectory, "test"+fmt.Sprint(count)+".json"))
-		defer os.Remove(filepath.Join(finishedDirectory, "test"+fmt.Sprint(count)+".json"))
 	}
 
 	require.NoError(t, err)
