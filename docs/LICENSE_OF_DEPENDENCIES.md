@@ -182,6 +182,8 @@ following works:
 - modernc.org/libc [BSD 3-Clause "New" or "Revised" License](https://gitlab.com/cznic/libc/-/blob/master/LICENSE)
 - modernc.org/memory [BSD 3-Clause "New" or "Revised" License](https://gitlab.com/cznic/memory/-/blob/master/LICENSE)
 - modernc.org/sqlite [BSD 3-Clause "New" or "Revised" License](https://gitlab.com/cznic/sqlite/-/blob/master/LICENSE)
+- github.com/orcaman/concurrent-map [MIT License](https://github.com/orcaman/concurrent-map/blob/master/LICENSE)
+- gopkg.in/djherbis/times.v1 [MIT License](https://github.com/djherbis/times/blob/master/LICENSE)
 
 ## telegraf used and modified code from these projects
 - github.com/DataDog/datadog-agent [Apache License 2.0](https://github.com/DataDog/datadog-agent/LICENSE)
