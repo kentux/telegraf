@@ -3,7 +3,7 @@ package directory_monitor
 import (
 	"errors"
 	"fmt"
-	"strings"
+	"regexp"
 	"time"
 
 	"github.com/dimchansky/utfbom"
@@ -45,7 +45,10 @@ use_error_directory = "true"
 ##       character_encoding = "utf-16be"
 # character_encoding = "utf-8"
 #
-## A list of files to ignore, if necessary. Please only provide file name and not a full path.
+## A list of the only file names to monitor, if necessary. Supports regex. If left blank, all files are ingested.
+# files_to_monitor = [".*.csv"]
+#
+## A list of files to ignore, if necessary. Supports regex.
 # files_to_ignore = [".DS_Store"]
 #
 ## Maximum lines of the file to process that have not yet be written by the
@@ -69,6 +72,7 @@ data_format = "influx"
 `
 
 var (
+	defaultFilesToMonitor             = []string{}
 	defaultFilesToIgnore              = []string{}
 	defaultMaxBufferedMetrics         = 1000
 	defaultMonitorInterval            = internal.Duration{Duration: 50 * time.Millisecond}
@@ -85,21 +89,24 @@ type DirectoryMonitor struct {
 	ErrorDirectory    string `toml:"error_directory"`
 
 	CharacterEncoding          string            `toml:"character_encoding"`
+	FilesToMonitor             []string          `toml:"files_to_monitor"`
 	FilesToIgnore              []string          `toml:"files_to_ignore"`
 	MaxBufferedMetrics         int               `toml:"max_buffered_metrics"`
 	MonitorInterval            internal.Duration `toml:"monitor_interval"`
 	DirectoryDurationThreshold internal.Duration `toml:"directory_duration_threshold"`
 
-	filesInUse     cmap.ConcurrentMap
-	Log            telegraf.Logger
-	parser         parsers.Parser
-	decoder        *encoding.Decoder
-	filesProcessed selfstat.Stat
-	filesDropped   selfstat.Stat
-	waitGroup      *sync.WaitGroup
-	acc            telegraf.TrackingAccumulator
-	sem            semaphore
-	quit           chan bool
+	filesInUse          cmap.ConcurrentMap
+	Log                 telegraf.Logger
+	parser              parsers.Parser
+	decoder             *encoding.Decoder
+	filesProcessed      selfstat.Stat
+	filesDropped        selfstat.Stat
+	waitGroup           *sync.WaitGroup
+	acc                 telegraf.TrackingAccumulator
+	sem                 semaphore
+	quit                chan bool
+	fileRegexesToMatch  []*regexp.Regexp
+	fileRegexesToIgnore []*regexp.Regexp
 }
 
 func (monitor *DirectoryMonitor) SampleConfig() string {
@@ -194,7 +201,13 @@ func (monitor *DirectoryMonitor) processFileBatch(files []os.FileInfo, acc teleg
 
 		filePath := monitor.Directory + "/" + fileInfo.Name()
 
-		if monitor.isIgnoredFile(filePath) {
+		// File must be configured to be monitored, if any configuration...
+		if !monitor.isMonitoredFile(fileInfo.Name()) {
+			continue
+		}
+
+		// ...and should not be configured to be ignored.
+		if monitor.isIgnoredFile(fileInfo.Name()) {
 			continue
 		}
 
@@ -278,10 +291,25 @@ func (monitor *DirectoryMonitor) moveFile(filePath string, directory string) {
 	}
 }
 
+func (monitor *DirectoryMonitor) isMonitoredFile(fileName string) bool {
+	if len(monitor.fileRegexesToMatch) == 0 {
+		return true
+	}
+
+	// Only monitor matching files.
+	for _, regex := range monitor.fileRegexesToMatch {
+		if regex.MatchString(fileName) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (monitor *DirectoryMonitor) isIgnoredFile(fileName string) bool {
 	// Skip files that are set to be ignored.
-	for _, ignoreName := range monitor.FilesToIgnore {
-		if strings.HasSuffix(fileName, ignoreName) {
+	for _, regex := range monitor.fileRegexesToIgnore {
+		if regex.MatchString(fileName) {
 			return true
 		}
 	}
@@ -335,12 +363,30 @@ func (monitor *DirectoryMonitor) Init() error {
 	monitor.filesInUse = cmap.New()
 	monitor.quit = make(chan bool)
 
+	// Establish file matching / exclusion regexes.
+	for _, matcher := range monitor.FilesToMonitor {
+		regex, err := regexp.Compile(matcher)
+		if err != nil {
+			return err
+		}
+		monitor.fileRegexesToMatch = append(monitor.fileRegexesToMatch, regex)
+	}
+
+	for _, matcher := range monitor.FilesToIgnore {
+		regex, err := regexp.Compile(matcher)
+		if err != nil {
+			return err
+		}
+		monitor.fileRegexesToIgnore = append(monitor.fileRegexesToIgnore, regex)
+	}
+
 	return err
 }
 
 func init() {
 	inputs.Add("directory_monitor", func() telegraf.Input {
 		return &DirectoryMonitor{
+			FilesToMonitor:             defaultFilesToMonitor,
 			FilesToIgnore:              defaultFilesToIgnore,
 			MaxBufferedMetrics:         defaultMaxBufferedMetrics,
 			MonitorInterval:            defaultMonitorInterval,

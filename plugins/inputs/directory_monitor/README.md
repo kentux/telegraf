@@ -28,7 +28,10 @@ use_error_directory = "true"
 ##       character_encoding = "utf-16be"
 # character_encoding = "utf-8"
 #
-## A list of files to ignore, if necessary. Please only provide file name and not a full path.
+## A list of the only file names to monitor, if necessary. Supports regex. If left blank, all files are ingested.
+# files_to_monitor = [".*.csv"]
+#
+## A list of files to ignore, if necessary. Supports regex.
 # files_to_ignore = [".DS_Store"]
 #
 ## Maximum lines of the file to process that have not yet be written by the

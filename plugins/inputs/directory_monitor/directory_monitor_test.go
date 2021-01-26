@@ -84,6 +84,7 @@ func TestGZFileImport(t *testing.T) {
 		Directory:          processDirectory,
 		FinishedDirectory:  finishedDirectory,
 		MaxBufferedMetrics: 1000,
+		FilesToMonitor:     []string{".*.csv.gz"},
 	}
 
 	r.Log = testutil.Logger{}
