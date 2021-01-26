@@ -117,6 +117,7 @@ following works:
 - github.com/opencontainers/go-digest [Apache License 2.0](https://github.com/opencontainers/go-digest/blob/master/LICENSE)
 - github.com/opencontainers/image-spec [Apache License 2.0](https://github.com/opencontainers/image-spec/blob/master/LICENSE)
 - github.com/openzipkin/zipkin-go-opentracing [MIT License](https://github.com/openzipkin/zipkin-go-opentracing/blob/master/LICENSE)
+- github.com/orcaman/concurrent-map [MIT License](https://github.com/orcaman/concurrent-map/blob/master/LICENSE)
 - github.com/pierrec/lz4 [BSD 3-Clause "New" or "Revised" License](https://github.com/pierrec/lz4/blob/master/LICENSE)
 - github.com/pkg/errors [BSD 2-Clause "Simplified" License](https://github.com/pkg/errors/blob/master/LICENSE)
 - github.com/pmezard/go-difflib [BSD 3-Clause Clear License](https://github.com/pmezard/go-difflib/blob/master/LICENSE)
@@ -164,6 +165,7 @@ following works:
 - google.golang.org/genproto [Apache License 2.0](https://github.com/google/go-genproto/blob/master/LICENSE)
 - google.golang.org/grpc [Apache License 2.0](https://github.com/grpc/grpc-go/blob/master/LICENSE)
 - gopkg.in/asn1-ber.v1 [MIT License](https://github.com/go-asn1-ber/asn1-ber/blob/v1.3/LICENSE)
+- gopkg.in/djherbis/times.v1 [MIT License](https://github.com/djherbis/times/blob/master/LICENSE)
 - gopkg.in/fatih/pool.v2 [MIT License](https://github.com/fatih/pool/blob/v2.0.0/LICENSE)
 - gopkg.in/fsnotify.v1 [BSD 3-Clause "New" or "Revised" License](https://github.com/fsnotify/fsnotify/blob/v1.4.7/LICENSE)
 - gopkg.in/gorethink/gorethink.v3 [Apache License 2.0](https://github.com/rethinkdb/rethinkdb-go/blob/v3.0.5/LICENSE)
@@ -182,8 +184,6 @@ following works:
 - modernc.org/libc [BSD 3-Clause "New" or "Revised" License](https://gitlab.com/cznic/libc/-/blob/master/LICENSE)
 - modernc.org/memory [BSD 3-Clause "New" or "Revised" License](https://gitlab.com/cznic/memory/-/blob/master/LICENSE)
 - modernc.org/sqlite [BSD 3-Clause "New" or "Revised" License](https://gitlab.com/cznic/sqlite/-/blob/master/LICENSE)
-- github.com/orcaman/concurrent-map [MIT License](https://github.com/orcaman/concurrent-map/blob/master/LICENSE)
-- gopkg.in/djherbis/times.v1 [MIT License](https://github.com/djherbis/times/blob/master/LICENSE)
 
 ## telegraf used and modified code from these projects
 - github.com/DataDog/datadog-agent [Apache License 2.0](https://github.com/DataDog/datadog-agent/LICENSE)
