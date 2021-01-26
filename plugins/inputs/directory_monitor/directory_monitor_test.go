@@ -21,9 +21,12 @@ func TestCSVAddedLive(t *testing.T) {
 	testFile := "test.csv"
 
 	// Establish process directory and finished directory.
-	finishedDirectory, _ := ioutil.TempDir("", "finished")
-	processDirectory, _ := ioutil.TempDir("", "test")
-	defer os.Remove(processDirectory)
+	finishedDirectory, err := ioutil.TempDir("", "finished")
+	require.NoError(t, err)
+	processDirectory, err := ioutil.TempDir("", "test")
+	require.NoError(t, err)
+	defer os.RemoveAll(processDirectory)
+	defer os.RemoveAll(finishedDirectory)
 
 	// Init plugin.
 	r := DirectoryMonitor{
@@ -31,7 +34,7 @@ func TestCSVAddedLive(t *testing.T) {
 		FinishedDirectory:  finishedDirectory,
 		MaxBufferedMetrics: 1000,
 	}
-	err := r.Init()
+	err = r.Init()
 	require.NoError(t, err)
 
 	parserConfig := parsers.Config{
@@ -52,7 +55,6 @@ func TestCSVAddedLive(t *testing.T) {
 	require.NoError(t, err)
 	f.WriteString("thing,color\nsky,blue\ngrass,green\nclifford,red\n")
 	f.Close()
-	defer os.RemoveAll(finishedDirectory)
 
 	require.NoError(t, err)
 	time.Sleep(50 * time.Millisecond)
@@ -70,9 +72,12 @@ func TestGZFileImport(t *testing.T) {
 	testFile := "test.csv.gz"
 
 	// Establish process directory and finished directory.
-	finishedDirectory, _ := ioutil.TempDir("", "finished")
+	finishedDirectory, err := ioutil.TempDir("", "finished")
+	require.NoError(t, err)
 	processDirectory, _ := ioutil.TempDir("", "test")
-	defer os.Remove(processDirectory)
+	require.NoError(t, err)
+	defer os.RemoveAll(processDirectory)
+	defer os.RemoveAll(finishedDirectory)
 
 	// Init plugin.
 	r := DirectoryMonitor{
@@ -82,7 +87,7 @@ func TestGZFileImport(t *testing.T) {
 	}
 
 	r.Log = testutil.Logger{}
-	err := r.Init()
+	err = r.Init()
 	require.NoError(t, err)
 
 	parserConfig := parsers.Config{
@@ -104,7 +109,6 @@ func TestGZFileImport(t *testing.T) {
 	w.Write([]byte("thing,color\nsky,blue\ngrass,green\nclifford,red\n"))
 	w.Close()
 	err = ioutil.WriteFile(testFileName, b.Bytes(), 0666)
-	defer os.RemoveAll(finishedDirectory)
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -127,9 +131,11 @@ func TestMultipleJSONFileImports(t *testing.T) {
 	acc := testutil.Accumulator{}
 
 	// Establish process directory and finished directory.
-	finishedDirectory, _ := ioutil.TempDir("", "finished")
-	processDirectory, _ := ioutil.TempDir("", "test")
-	defer os.Remove(processDirectory)
+	finishedDirectory, err := ioutil.TempDir("", "finished")
+	require.NoError(t, err)
+	processDirectory, err := ioutil.TempDir("", "test")
+	require.NoError(t, err)
+	defer os.RemoveAll(processDirectory)
 	defer os.RemoveAll(finishedDirectory)
 
 	// Init plugin.
@@ -138,7 +144,7 @@ func TestMultipleJSONFileImports(t *testing.T) {
 		FinishedDirectory:  finishedDirectory,
 		MaxBufferedMetrics: 1000,
 	}
-	err := r.Init()
+	err = r.Init()
 	require.NoError(t, err)
 
 	parserConfig := parsers.Config{
