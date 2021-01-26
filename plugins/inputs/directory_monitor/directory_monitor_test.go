@@ -18,14 +18,11 @@ import (
 
 func TestCSVAddedLive(t *testing.T) {
 	acc := testutil.Accumulator{}
-	wd, err := os.Getwd()
-	require.NoError(t, err)
 	testFile := "test.csv"
 
 	// Establish process directory and finished directory.
-	finishedDirectory, _ := ioutil.TempDir(wd, "finished")
-	processDirectory, _ := ioutil.TempDir(wd, "test")
-	require.NoError(t, err)
+	finishedDirectory, _ := ioutil.TempDir("", "finished")
+	processDirectory, _ := ioutil.TempDir("", "test")
 	defer os.Remove(processDirectory)
 
 	// Init plugin.
@@ -34,7 +31,7 @@ func TestCSVAddedLive(t *testing.T) {
 		FinishedDirectory:  finishedDirectory,
 		MaxBufferedMetrics: 1000,
 	}
-	err = r.Init()
+	err := r.Init()
 	require.NoError(t, err)
 
 	parserConfig := parsers.Config{
@@ -70,14 +67,11 @@ func TestCSVAddedLive(t *testing.T) {
 
 func TestGZFileImport(t *testing.T) {
 	acc := testutil.Accumulator{}
-	wd, err := os.Getwd()
-	require.NoError(t, err)
 	testFile := "test.csv.gz"
 
 	// Establish process directory and finished directory.
-	finishedDirectory, _ := ioutil.TempDir(wd, "finished")
-	processDirectory, _ := ioutil.TempDir(wd, "test")
-	require.NoError(t, err)
+	finishedDirectory, _ := ioutil.TempDir("", "finished")
+	processDirectory, _ := ioutil.TempDir("", "test")
 	defer os.Remove(processDirectory)
 
 	// Init plugin.
@@ -88,7 +82,7 @@ func TestGZFileImport(t *testing.T) {
 	}
 
 	r.Log = testutil.Logger{}
-	err = r.Init()
+	err := r.Init()
 	require.NoError(t, err)
 
 	parserConfig := parsers.Config{
@@ -131,13 +125,10 @@ type event struct {
 
 func TestMultipleJSONFileImports(t *testing.T) {
 	acc := testutil.Accumulator{}
-	wd, err := os.Getwd()
-	require.NoError(t, err)
 
 	// Establish process directory and finished directory.
-	finishedDirectory, _ := ioutil.TempDir(wd, "finished")
-	processDirectory, _ := ioutil.TempDir(wd, "test")
-	require.NoError(t, err)
+	finishedDirectory, _ := ioutil.TempDir("", "finished")
+	processDirectory, _ := ioutil.TempDir("", "test")
 	defer os.Remove(processDirectory)
 	defer os.RemoveAll(finishedDirectory)
 
@@ -147,7 +138,7 @@ func TestMultipleJSONFileImports(t *testing.T) {
 		FinishedDirectory:  finishedDirectory,
 		MaxBufferedMetrics: 1000,
 	}
-	err = r.Init()
+	err := r.Init()
 	require.NoError(t, err)
 
 	parserConfig := parsers.Config{
