@@ -23,15 +23,15 @@ func TestMoveCSVFileToImport(t *testing.T) {
 	testFile := "colors.csv"
 
 	// Establish process directory and finished directory.
-	testFileDirectory := filepath.Join(wd, "testfiles")
-	processDirectory, err := ioutil.TempDir(testFileDirectory, "process")
+	finishedDirectory := filepath.Join(wd, "testfiles/finished")
+	processDirectory := filepath.Join(wd, "testfiles")
 	require.NoError(t, err)
 	defer os.Remove(processDirectory)
 
 	// Init plugin.
 	r := DirectoryMonitor{
 		Directory:          processDirectory,
-		FinishedDirectory:  testFileDirectory,
+		FinishedDirectory:  finishedDirectory,
 		MaxBufferedMetrics: 1000,
 	}
 	r.Log = testutil.Logger{}
@@ -50,7 +50,7 @@ func TestMoveCSVFileToImport(t *testing.T) {
 	require.NoError(t, err)
 
 	// Move file to process into the 'process' directory.
-	os.Rename(filepath.Join(testFileDirectory, testFile), filepath.Join(processDirectory, testFile))
+	os.Rename(filepath.Join(finishedDirectory, testFile), filepath.Join(processDirectory, testFile))
 
 	// Ensure that a stop event still allows for the file that's already processing to finish.
 	r.Stop()
@@ -60,7 +60,7 @@ func TestMoveCSVFileToImport(t *testing.T) {
 	require.Equal(t, len(acc.Metrics), 2)
 
 	// File should have been moved back to the test directory, as we configured.
-	_, err = os.Stat(filepath.Join(testFileDirectory, testFile))
+	_, err = os.Stat(filepath.Join(finishedDirectory, testFile))
 	require.NoError(t, err)
 }
 
@@ -71,15 +71,15 @@ func TestCSVAddedLive(t *testing.T) {
 	testFile := "test.csv"
 
 	// Establish process directory and finished directory.
-	testFileDirectory := filepath.Join(wd, "testfiles")
-	processDirectory, err := ioutil.TempDir(testFileDirectory, "process")
+	finishedDirectory := filepath.Join(wd, "testfiles/finished")
+	processDirectory := filepath.Join(wd, "testfiles")
 	require.NoError(t, err)
 	defer os.Remove(processDirectory)
 
 	// Init plugin.
 	r := DirectoryMonitor{
 		Directory:          processDirectory,
-		FinishedDirectory:  testFileDirectory,
+		FinishedDirectory:  finishedDirectory,
 		MaxBufferedMetrics: 1000,
 	}
 	err = r.Init()
@@ -103,7 +103,7 @@ func TestCSVAddedLive(t *testing.T) {
 	require.NoError(t, err)
 	f.WriteString("thing,color\nsky,blue\ngrass,green\nclifford,red\n")
 	f.Close()
-	defer os.Remove(filepath.Join(testFileDirectory, testFile))
+	defer os.Remove(filepath.Join(finishedDirectory, testFile))
 
 	require.NoError(t, err)
 	time.Sleep(50 * time.Millisecond)
@@ -112,7 +112,7 @@ func TestCSVAddedLive(t *testing.T) {
 	require.Equal(t, len(acc.Metrics), 3)
 
 	// File should have back to the test directory, as we configured.
-	_, err = os.Stat(filepath.Join(testFileDirectory, testFile))
+	_, err = os.Stat(filepath.Join(finishedDirectory, testFile))
 	require.NoError(t, err)
 }
 
@@ -123,20 +123,18 @@ func TestGZFileImport(t *testing.T) {
 	testFile := "test.csv.gz"
 
 	// Establish process directory and finished directory.
-	testFileDirectory := filepath.Join(wd, "testfiles")
-	processDirectory, err := ioutil.TempDir(testFileDirectory, "process")
+	finishedDirectory := filepath.Join(wd, "testfiles/finished")
+	processDirectory := filepath.Join(wd, "testfiles")
 	require.NoError(t, err)
 	defer os.Remove(processDirectory)
 
 	// Init plugin.
 	r := DirectoryMonitor{
 		Directory:          processDirectory,
-		FinishedDirectory:  testFileDirectory,
+		FinishedDirectory:  finishedDirectory,
 		MaxBufferedMetrics: 1000,
 	}
 
-	fmt.Println(processDirectory)
-	fmt.Println(testFileDirectory)
 	r.Log = testutil.Logger{}
 	err = r.Init()
 	require.NoError(t, err)
@@ -160,7 +158,7 @@ func TestGZFileImport(t *testing.T) {
 	w.Write([]byte("thing,color\nsky,blue\ngrass,green\nclifford,red\n"))
 	w.Close()
 	err = ioutil.WriteFile(testFileName, b.Bytes(), 0666)
-	defer os.Remove(filepath.Join(testFileDirectory, testFile))
+	defer os.Remove(filepath.Join(finishedDirectory, testFile))
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -168,7 +166,7 @@ func TestGZFileImport(t *testing.T) {
 	require.Equal(t, len(acc.Metrics), 3)
 
 	// File should have back to the test directory, as we configured.
-	_, err = os.Stat(filepath.Join(testFileDirectory, testFile))
+	_, err = os.Stat(filepath.Join(finishedDirectory, testFile))
 	require.NoError(t, err)
 }
 
@@ -185,15 +183,15 @@ func TestMultipleJSONFileImports(t *testing.T) {
 	require.NoError(t, err)
 
 	// Establish process directory and finished directory.
-	testFileDirectory := filepath.Join(wd, "testfiles")
-	processDirectory, err := ioutil.TempDir(testFileDirectory, "process")
+	finishedDirectory := filepath.Join(wd, "testfiles/finished")
+	processDirectory := filepath.Join(wd, "testfiles")
 	require.NoError(t, err)
 	defer os.Remove(processDirectory)
 
 	// Init plugin.
 	r := DirectoryMonitor{
 		Directory:          processDirectory,
-		FinishedDirectory:  testFileDirectory,
+		FinishedDirectory:  finishedDirectory,
 		MaxBufferedMetrics: 1000,
 	}
 	err = r.Init()
@@ -240,7 +238,7 @@ func TestMultipleJSONFileImports(t *testing.T) {
 
 	for count, data := range fileData {
 		writeJSONFile(data, filepath.Join(processDirectory, "test"+fmt.Sprint(count)+".json"))
-		defer os.Remove(filepath.Join(testFileDirectory, "test"+fmt.Sprint(count)+".json"))
+		defer os.Remove(filepath.Join(finishedDirectory, "test"+fmt.Sprint(count)+".json"))
 	}
 
 	require.NoError(t, err)
