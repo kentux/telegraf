@@ -99,6 +99,7 @@ type DirectoryMonitor struct {
 	waitGroup      *sync.WaitGroup
 	acc            telegraf.TrackingAccumulator
 	sem            semaphore
+	quit           chan bool
 }
 
 func (monitor *DirectoryMonitor) SampleConfig() string {
@@ -129,6 +130,7 @@ func (monitor *DirectoryMonitor) Start(acc telegraf.Accumulator) error {
 
 func (monitor *DirectoryMonitor) Stop() {
 	// Before stopping, wrap up all file-reading routines.
+	monitor.quit <- true
 	monitor.Log.Warnf("Exiting the Directory Monitor plugin. Waiting to quit until all current files are finished.")
 	monitor.waitGroup.Wait()
 }
@@ -137,6 +139,13 @@ func (monitor *DirectoryMonitor) Monitor(acc telegraf.Accumulator) {
 	for {
 		// Monitor in intervals.
 		time.Sleep(monitor.MonitorInterval.Duration)
+
+		// Allow the monitor to be quit.
+		select {
+		case <-monitor.quit:
+			return
+		default:
+		}
 
 		// Get all files sitting in the directory.
 		files, err := ioutil.ReadDir(monitor.Directory)
@@ -324,6 +333,7 @@ func (monitor *DirectoryMonitor) Init() error {
 	monitor.waitGroup = new(sync.WaitGroup)
 	monitor.sem = make(semaphore, monitor.MaxBufferedMetrics)
 	monitor.filesInUse = cmap.New()
+	monitor.quit = make(chan bool)
 
 	return err
 }
