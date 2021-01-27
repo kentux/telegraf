@@ -38,6 +38,14 @@ use_error_directory = "true"
 ## If not is given, the error directory will be auto-generated.
 # error_directory = ""
 #
+## The interval at which to check the directory for new files.
+# monitor_interval = "50ms"
+#
+## The amount of time a file is allowed to sit in the directory before it is picked up.
+## This time can generally be low but if you choose to have a very large file written to the directory and it's potentially slow,
+## set this higher so that the plugin will wait until the file is fully copied to the directory.
+# directory_duration_threshold = "50ms"
+#
 ## Character encoding to use when interpreting the file contents. Invalid
 ## characters are replaced using the unicode replacement character. Defaults to utf-8.
 ##   ex: character_encoding = "utf-8"
@@ -56,13 +64,8 @@ use_error_directory = "true"
 ## Warning: setting this number too high can lead to a high number of dropped metrics.
 # max_buffered_metrics = 1000
 #
-## The interval at which to check the directory for new files.
-# monitor_interval = "50ms"
-#
-## The amount of time a file is allowed to sit in the directory before it is picked up.
-## This time can generally be low but if you choose to have a very large file written to the directory and it's potentially slow,
-## set this higher so that the plugin will wait until the file is fully copied to the directory.
-# directory_duration_threshold = "50ms"
+## The maximum amount of files to process at once. A very high number can lead to bigger memory use and potential file system errors.
+# max_concurrent_files = 3000
 #
 ## The dataformat to be read from the files.
 ## Each data format has its own unique set of configuration options, read
@@ -75,6 +78,7 @@ var (
 	defaultFilesToMonitor             = []string{}
 	defaultFilesToIgnore              = []string{}
 	defaultMaxBufferedMetrics         = 1000
+	defaultMaxConcurrentFiles         = 3000
 	defaultMonitorInterval            = internal.Duration{Duration: 50 * time.Millisecond}
 	defaultDirectoryDurationThreshold = internal.Duration{Duration: 50 * time.Millisecond}
 )
@@ -94,6 +98,7 @@ type DirectoryMonitor struct {
 	MaxBufferedMetrics         int               `toml:"max_buffered_metrics"`
 	MonitorInterval            internal.Duration `toml:"monitor_interval"`
 	DirectoryDurationThreshold internal.Duration `toml:"directory_duration_threshold"`
+	MaxConcurrentFiles         int               `toml:"max_concurrent_files"`
 
 	filesInUse          cmap.ConcurrentMap
 	Log                 telegraf.Logger
@@ -130,7 +135,8 @@ func (monitor *DirectoryMonitor) Start(acc telegraf.Accumulator) error {
 	}()
 
 	// Check the directory at intervals and send off any and all files to be read.
-	go monitor.Monitor(acc)
+	monitor.waitGroup.Add(1)
+	go monitor.Monitor(acc, monitor.waitGroup)
 
 	return nil
 }
@@ -142,18 +148,10 @@ func (monitor *DirectoryMonitor) Stop() {
 	monitor.waitGroup.Wait()
 }
 
-func (monitor *DirectoryMonitor) Monitor(acc telegraf.Accumulator) {
+func (monitor *DirectoryMonitor) Monitor(acc telegraf.Accumulator, waitGroup *sync.WaitGroup) {
+	defer waitGroup.Done()
+
 	for {
-		// Monitor in intervals.
-		time.Sleep(monitor.MonitorInterval.Duration)
-
-		// Allow the monitor to be quit.
-		select {
-		case <-monitor.quit:
-			return
-		default:
-		}
-
 		// Get all files sitting in the directory.
 		files, err := ioutil.ReadDir(monitor.Directory)
 		if err != nil {
@@ -177,11 +175,12 @@ func (monitor *DirectoryMonitor) Monitor(acc telegraf.Accumulator) {
 				continue
 			}
 
+			enoughRoomForFile := monitor.filesInUse.Count() < monitor.MaxConcurrentFiles
 			timeThresholdExceeded := time.Since(stat.AccessTime()) > monitor.DirectoryDurationThreshold.Duration
 			_, fileAlreadyProcessing := monitor.filesInUse.Get(filePath)
 
 			// If file is decaying, process it.
-			if timeThresholdExceeded && !fileAlreadyProcessing {
+			if enoughRoomForFile && timeThresholdExceeded && !fileAlreadyProcessing {
 				// Set the file as 'in use' so that subsequent Monitor runs won't possibly pick it up again.
 				monitor.filesInUse.Set(filePath, struct{}{})
 				filesToProcess = append(filesToProcess, fileInfo)
@@ -189,6 +188,14 @@ func (monitor *DirectoryMonitor) Monitor(acc telegraf.Accumulator) {
 		}
 
 		monitor.processFileBatch(filesToProcess, acc)
+
+		select {
+		// Monitor in intervals.
+		case <-time.After(monitor.MonitorInterval.Duration):
+		// Allow the monitor to be quit.
+		case <-monitor.quit:
+			return
+		}
 	}
 }
 
@@ -391,6 +398,7 @@ func init() {
 			MaxBufferedMetrics:         defaultMaxBufferedMetrics,
 			MonitorInterval:            defaultMonitorInterval,
 			DirectoryDurationThreshold: defaultDirectoryDurationThreshold,
+			MaxConcurrentFiles:         defaultMaxConcurrentFiles,
 		}
 	})
 }

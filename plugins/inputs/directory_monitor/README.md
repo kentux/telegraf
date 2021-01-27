@@ -21,6 +21,14 @@ use_error_directory = "true"
 ## If not is given, the error directory will be auto-generated.
 # error_directory = ""
 #
+## The interval at which to check the directory for new files.
+# monitor_interval = "50ms"
+#
+## The amount of time a file is allowed to sit in the directory before it is picked up.
+## This time can generally be low but if you choose to have a very large file written to the directory and it's potentially slow,
+## set this higher so that the plugin will wait until the file is fully copied to the directory.
+# directory_duration_threshold = "50ms"
+#
 ## Character encoding to use when interpreting the file contents. Invalid
 ## characters are replaced using the unicode replacement character. Defaults to utf-8.
 ##   ex: character_encoding = "utf-8"
@@ -39,13 +47,8 @@ use_error_directory = "true"
 ## Warning: setting this number too high can lead to a high number of dropped metrics.
 # max_buffered_metrics = 1000
 #
-## The interval at which to check the directory for new files.
-# monitor_interval = "50ms"
-#
-## The amount of time a file is allowed to sit in the directory before it is picked up.
-## This time can generally be low but if you choose to have a very large file written to the directory and it's potentially slow,
-## set this higher so that the plugin will wait until the file is fully copied to the directory.
-# directory_duration_threshold = "50ms"
+## The maximum amount of files to process at once. A very high number can lead to bigger memory use and potential file system errors.
+# max_concurrent_files = 3000
 #
 ## The dataformat to be read from the files.
 ## Each data format has its own unique set of configuration options, read

@@ -16,9 +16,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCSVAddedLive(t *testing.T) {
+func TestCSVGZImport(t *testing.T) {
 	acc := testutil.Accumulator{}
-	testFile := "test.csv"
+	testCsvFile := "test.csv"
+	testCsvGzFile := "test.csv.gz"
 
 	// Establish process directory and finished directory.
 	finishedDirectory, err := ioutil.TempDir("", "finished")
@@ -33,6 +34,7 @@ func TestCSVAddedLive(t *testing.T) {
 		Directory:          processDirectory,
 		FinishedDirectory:  finishedDirectory,
 		MaxBufferedMetrics: 1000,
+		MaxConcurrentFiles: 1000,
 	}
 	err = r.Init()
 	require.NoError(t, err)
@@ -46,79 +48,34 @@ func TestCSVAddedLive(t *testing.T) {
 	r.parser = nParser
 	r.Log = testutil.Logger{}
 
-	// Start plugin before adding file.
-	r.Start(&acc)
-
-	// Write file to process into the 'process' directory.
-	testFileName := filepath.Join(processDirectory, testFile)
-	f, err := os.Create(testFileName)
+	// Write csv file to process into the 'process' directory.
+	f, err := os.Create(filepath.Join(processDirectory, testCsvFile))
 	require.NoError(t, err)
 	f.WriteString("thing,color\nsky,blue\ngrass,green\nclifford,red\n")
 	f.Close()
 
-	require.NoError(t, err)
-	time.Sleep(50 * time.Millisecond)
-
-	// Verify that we read the CSV once.
-	require.Equal(t, len(acc.Metrics), 3)
-
-	// File should have back to the test directory, as we configured.
-	_, err = os.Stat(filepath.Join(finishedDirectory, testFile))
-	require.NoError(t, err)
-}
-
-func TestGZFileImport(t *testing.T) {
-	acc := testutil.Accumulator{}
-	testFile := "test.csv.gz"
-
-	// Establish process directory and finished directory.
-	finishedDirectory, err := ioutil.TempDir("", "finished")
-	require.NoError(t, err)
-	processDirectory, _ := ioutil.TempDir("", "test")
-	require.NoError(t, err)
-	defer os.RemoveAll(processDirectory)
-	defer os.RemoveAll(finishedDirectory)
-
-	// Init plugin.
-	r := DirectoryMonitor{
-		Directory:          processDirectory,
-		FinishedDirectory:  finishedDirectory,
-		MaxBufferedMetrics: 1000,
-		FilesToMonitor:     []string{".*.csv.gz"},
-	}
-
-	r.Log = testutil.Logger{}
-	err = r.Init()
-	require.NoError(t, err)
-
-	parserConfig := parsers.Config{
-		DataFormat:        "csv",
-		CSVHeaderRowCount: 1,
-	}
-	nParser, err := parsers.NewParser(&parserConfig)
-	require.NoError(t, err)
-	r.parser = nParser
-
-	r.Start(&acc)
-	require.NoError(t, err)
-
-	// Write gz file to process into the 'process' directory.
-	testFileName := filepath.Join(processDirectory, testFile)
-	require.NoError(t, err)
+	// Write csv.gz file to process into the 'process' directory.
 	var b bytes.Buffer
 	w := gzip.NewWriter(&b)
 	w.Write([]byte("thing,color\nsky,blue\ngrass,green\nclifford,red\n"))
 	w.Close()
-	err = ioutil.WriteFile(testFileName, b.Bytes(), 0666)
+	err = ioutil.WriteFile(filepath.Join(processDirectory, testCsvGzFile), b.Bytes(), 0666)
 
+	// Start plugin before adding file.
+	err = r.Start(&acc)
+	require.NoError(t, err)
 	time.Sleep(50 * time.Millisecond)
 
-	// Verify that we read the CSV once.
-	require.Equal(t, len(acc.Metrics), 3)
+	// Verify that we read both files once.
+	require.Equal(t, len(acc.Metrics), 6)
 
-	// File should have back to the test directory, as we configured.
-	_, err = os.Stat(filepath.Join(finishedDirectory, testFile))
+	// File should have gone back to the test directory, as we configured.
+	_, err = os.Stat(filepath.Join(finishedDirectory, testCsvFile))
+	_, err = os.Stat(filepath.Join(finishedDirectory, testCsvGzFile))
+
 	require.NoError(t, err)
+
+	r.Stop()
 }
 
 // For JSON data.
@@ -144,6 +101,7 @@ func TestMultipleJSONFileImports(t *testing.T) {
 		Directory:          processDirectory,
 		FinishedDirectory:  finishedDirectory,
 		MaxBufferedMetrics: 1000,
+		MaxConcurrentFiles: 1000,
 	}
 	err = r.Init()
 	require.NoError(t, err)
@@ -155,7 +113,7 @@ func TestMultipleJSONFileImports(t *testing.T) {
 	nParser, err := parsers.NewParser(&parserConfig)
 	require.NoError(t, err)
 	r.parser = nParser
-	r.Start(&acc)
+	err = r.Start(&acc)
 	r.Log = testutil.Logger{}
 
 	// Let's drop 5 JSONs.
@@ -201,6 +159,8 @@ func TestMultipleJSONFileImports(t *testing.T) {
 	for _, data := range fileData {
 		acc.AssertContainsFields(t, data.Name, map[string]interface{}{"Length": data.Length, "Speed": data.Speed})
 	}
+
+	r.Stop()
 }
 
 func writeJSONFile(data event, filePath string) (int, error) {
