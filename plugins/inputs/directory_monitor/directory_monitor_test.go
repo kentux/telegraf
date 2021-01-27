@@ -65,6 +65,7 @@ func TestCSVGZImport(t *testing.T) {
 	err = r.Start(&acc)
 	require.NoError(t, err)
 	time.Sleep(50 * time.Millisecond)
+	r.Stop()
 
 	// Verify that we read both files once.
 	require.Equal(t, len(acc.Metrics), 6)
@@ -74,8 +75,6 @@ func TestCSVGZImport(t *testing.T) {
 	_, err = os.Stat(filepath.Join(finishedDirectory, testCsvGzFile))
 
 	require.NoError(t, err)
-
-	r.Stop()
 }
 
 // For JSON data.
@@ -151,6 +150,7 @@ func TestMultipleJSONFileImports(t *testing.T) {
 
 	require.NoError(t, err)
 	time.Sleep(50 * time.Millisecond)
+	r.Stop()
 
 	// Verify that we read each JSON file once.
 	require.Equal(t, len(acc.Metrics), 5)
@@ -159,8 +159,6 @@ func TestMultipleJSONFileImports(t *testing.T) {
 	for _, data := range fileData {
 		acc.AssertContainsFields(t, data.Name, map[string]interface{}{"Length": data.Length, "Speed": data.Speed})
 	}
-
-	r.Stop()
 }
 
 func writeJSONFile(data event, filePath string) (int, error) {
