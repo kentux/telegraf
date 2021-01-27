@@ -7,6 +7,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -41,6 +42,7 @@ type Config struct {
 
 // Parser is a CSV parser, you should use NewParser to create a new instance.
 type Parser struct {
+	sync.Mutex
 	*Config
 }
 
@@ -112,6 +114,7 @@ func (p *Parser) Parse(buf []byte) ([]telegraf.Metric, error) {
 	// we always reread the header to avoid side effects
 	// in cases where multiple files with different
 	// headers are read
+	detectedColumnNames := []string{}
 	if !p.gotColumnNames {
 		headerNames := make([]string, 0)
 		for i := 0; i < p.HeaderRowCount; i++ {
@@ -132,7 +135,8 @@ func (p *Parser) Parse(buf []byte) ([]telegraf.Metric, error) {
 				}
 			}
 		}
-		p.ColumnNames = headerNames[p.SkipColumns:]
+		detectedColumnNames = headerNames[p.SkipColumns:]
+		p.setColumnNames(detectedColumnNames)
 	} else {
 		// if columns are named, just skip header rows
 		for i := 0; i < p.HeaderRowCount; i++ {
@@ -141,6 +145,9 @@ func (p *Parser) Parse(buf []byte) ([]telegraf.Metric, error) {
 				return nil, err
 			}
 		}
+
+		// We didn't have to detect the column names ourselves, use the ones that were explicitly configured.
+		detectedColumnNames = p.getColumnNames()
 	}
 
 	table, err := csvReader.ReadAll()
@@ -150,7 +157,7 @@ func (p *Parser) Parse(buf []byte) ([]telegraf.Metric, error) {
 
 	metrics := make([]telegraf.Metric, 0)
 	for _, record := range table {
-		m, err := p.parseRecord(record)
+		m, err := p.parseRecord(record, detectedColumnNames)
 		if err != nil {
 			return metrics, err
 		}
@@ -168,8 +175,9 @@ func (p *Parser) ParseLine(line string) (telegraf.Metric, error) {
 		return nil, err
 	}
 
+	columnNames := p.getColumnNames()
 	// if there is nothing in DataColumns, ParseLine will fail
-	if len(p.ColumnNames) == 0 {
+	if len(columnNames) == 0 {
 		return nil, fmt.Errorf("[parsers.csv] data columns must be specified")
 	}
 
@@ -177,21 +185,21 @@ func (p *Parser) ParseLine(line string) (telegraf.Metric, error) {
 	if err != nil {
 		return nil, err
 	}
-	m, err := p.parseRecord(record)
+	m, err := p.parseRecord(record, columnNames)
 	if err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (p *Parser) parseRecord(record []string) (telegraf.Metric, error) {
+func (p *Parser) parseRecord(record []string, columns []string) (telegraf.Metric, error) {
 	recordFields := make(map[string]interface{})
 	tags := make(map[string]string)
 
 	// skip columns in record
 	record = record[p.SkipColumns:]
 outer:
-	for i, fieldName := range p.ColumnNames {
+	for i, fieldName := range columns {
 		if i < len(record) {
 			value := record[i]
 			if p.TrimSpace {
@@ -323,4 +331,18 @@ func parseTimestamp(timeFunc func() time.Time, recordFields map[string]interface
 // SetDefaultTags set the DefaultTags
 func (p *Parser) SetDefaultTags(tags map[string]string) {
 	p.DefaultTags = tags
+}
+
+func (p *Parser) getColumnNames() []string {
+	p.Lock()
+	defer p.Unlock()
+
+	return p.ColumnNames
+}
+
+func (p *Parser) setColumnNames(names []string) {
+	p.Lock()
+	defer p.Unlock()
+
+	p.ColumnNames = names
 }
