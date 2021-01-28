@@ -1,6 +1,7 @@
 package directory_monitor
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"regexp"
@@ -12,6 +13,8 @@ import (
 	"github.com/influxdata/telegraf/plugins/common/encoding"
 	"github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/parsers"
+	"github.com/influxdata/telegraf/plugins/parsers/csv"
+	"github.com/influxdata/telegraf/plugins/parsers/json"
 	"github.com/influxdata/telegraf/selfstat"
 	cmap "github.com/orcaman/concurrent-map"
 	"gopkg.in/djherbis/times.v1"
@@ -71,6 +74,7 @@ use_error_directory = "true"
 ## Each data format has its own unique set of configuration options, read
 ## more about them here:
 ## https://github.com/influxdata/telegraf/blob/master/docs/DATA_FORMATS_INPUT.md
+## NOTE: We do not currently support JSON file streaming and thus JSON files will be fully loaded into memory when they are processed.
 data_format = "influx"
 `
 
@@ -219,17 +223,17 @@ func (monitor *DirectoryMonitor) processFileBatch(files []os.FileInfo, acc teleg
 		}
 
 		monitor.waitGroup.Add(1)
-		go monitor.read(acc, filePath, monitor.waitGroup)
+		go monitor.read(filePath, monitor.waitGroup)
 	}
 }
 
-func (monitor *DirectoryMonitor) read(acc telegraf.Accumulator, filePath string, waitGroup *sync.WaitGroup) {
+func (monitor *DirectoryMonitor) read(filePath string, waitGroup *sync.WaitGroup) {
 	// Remove the file from the set of files in use when it's finished.
 	defer monitor.filesInUse.Remove(filePath)
 	defer waitGroup.Done()
 
 	// Open, read, and parse the contents of the file.
-	metrics, err := monitor.readFileToMetrics(filePath)
+	err := monitor.ingestFile(filePath)
 
 	// Handle a file read error. We don't halt execution but do document, log, and move the problematic file.
 	if err != nil {
@@ -241,6 +245,97 @@ func (monitor *DirectoryMonitor) read(acc telegraf.Accumulator, filePath string,
 		return
 	}
 
+	// File is finished, move it to the 'finished' directory.
+	monitor.moveFile(filePath, monitor.FinishedDirectory)
+	monitor.filesProcessed.Incr(1)
+}
+
+func (monitor *DirectoryMonitor) ingestFile(filePath string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	parser, err := monitor.parserFunc()
+	if err != nil {
+		return fmt.Errorf("E! Creating parser: %s", err.Error())
+	}
+
+	// Handle gzipped files.
+	var reader io.Reader
+	if filepath.Ext(filePath) == ".gz" {
+		reader, err = gzip.NewReader(file)
+		if err != nil {
+			return err
+		}
+	} else {
+		reader, _ = utfbom.Skip(monitor.decoder.Reader(file))
+	}
+
+	return monitor.parseFile(parser, reader)
+}
+
+func (monitor *DirectoryMonitor) parseFile(parser parsers.Parser, reader io.Reader) error {
+	// JSON files can't be read line-by-line with the current parser.
+	// As a temporary strategy, read them whole, recognizing the potential memory trade-off.
+	if _, isJSONParser := parser.(*json.Parser); isJSONParser {
+		fileContents, err := ioutil.ReadAll(reader)
+		if err != nil {
+			return err
+		}
+
+		metrics, err := parser.Parse(fileContents)
+		if err != nil {
+			return err
+		}
+
+		monitor.sendMetrics(metrics)
+		return nil
+	}
+
+	// Read the file line-by-line and parse with the configured parse method.
+	firstLine := true
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		metrics, err := monitor.parseText(parser, scanner.Text(), firstLine)
+		if err != nil {
+			return err
+		}
+		if firstLine {
+			firstLine = false
+		}
+
+		monitor.sendMetrics(metrics)
+	}
+
+	return nil
+}
+
+func (monitor *DirectoryMonitor) parseText(parser parsers.Parser, line string, firstLine bool) ([]telegraf.Metric, error) {
+	switch parser.(type) {
+	case *csv.Parser:
+		// The CSV parser parses headers in Parse and skips them in ParseLine.
+		if firstLine {
+			return parser.Parse([]byte(line))
+		}
+
+		m, err := parser.ParseLine(line)
+		if err != nil {
+			return nil, err
+		}
+
+		if m != nil {
+			return []telegraf.Metric{m}, nil
+		}
+
+		return []telegraf.Metric{}, nil
+	default:
+		return parser.Parse([]byte(line))
+	}
+}
+
+func (monitor *DirectoryMonitor) sendMetrics(metrics []telegraf.Metric) {
 	// Report the metrics for the file.
 	for _, m := range metrics {
 		// Try writing out metric first without blocking.
@@ -257,42 +352,6 @@ func (monitor *DirectoryMonitor) read(acc telegraf.Accumulator, filePath string,
 			monitor.acc.AddTrackingMetricGroup([]telegraf.Metric{m})
 		}
 	}
-
-	// File is finished, move it to the 'finished' directory.
-	monitor.moveFile(filePath, monitor.FinishedDirectory)
-	monitor.filesProcessed.Incr(1)
-}
-
-func (monitor *DirectoryMonitor) readFileToMetrics(filePath string) ([]telegraf.Metric, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	parser, err := monitor.parserFunc()
-	if err != nil {
-		return nil, fmt.Errorf("E! Creating parser: %s", err.Error())
-	}
-
-	// Handle gzipped files.
-	var reader io.Reader
-	if filepath.Ext(filePath) == ".gz" {
-		reader, err = gzip.NewReader(file)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		reader, _ = utfbom.Skip(monitor.decoder.Reader(file))
-	}
-
-	// Read the file and parse with the configured parse method.
-	fileContents, err := ioutil.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("E! Error file: %v could not be read, %s", filePath, err)
-	}
-
-	return parser.Parse(fileContents)
 }
 
 func (monitor *DirectoryMonitor) moveFile(filePath string, directory string) {

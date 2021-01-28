@@ -54,5 +54,6 @@ use_error_directory = "true"
 ## Each data format has its own unique set of configuration options, read
 ## more about them here:
 ## https://github.com/influxdata/telegraf/blob/master/docs/DATA_FORMATS_INPUT.md
+## NOTE: We do not currently support JSON file streaming and thus JSON files will be fully loaded into memory when they are processed.
 data_format = "influx"
 ```
