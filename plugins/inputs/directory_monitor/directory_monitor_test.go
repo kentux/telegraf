@@ -43,9 +43,10 @@ func TestCSVGZImport(t *testing.T) {
 		DataFormat:        "csv",
 		CSVHeaderRowCount: 1,
 	}
-	nParser, err := parsers.NewParser(&parserConfig)
 	require.NoError(t, err)
-	r.parser = nParser
+	r.SetParserFunc(func() (parsers.Parser, error) {
+		return parsers.NewParser(&parserConfig)
+	})
 	r.Log = testutil.Logger{}
 
 	// Write csv file to process into the 'process' directory.
@@ -109,9 +110,10 @@ func TestMultipleJSONFileImports(t *testing.T) {
 		DataFormat:  "json",
 		JSONNameKey: "Name",
 	}
-	nParser, err := parsers.NewParser(&parserConfig)
-	require.NoError(t, err)
-	r.parser = nParser
+
+	r.SetParserFunc(func() (parsers.Parser, error) {
+		return parsers.NewParser(&parserConfig)
+	})
 	err = r.Start(&acc)
 	r.Log = testutil.Logger{}
 

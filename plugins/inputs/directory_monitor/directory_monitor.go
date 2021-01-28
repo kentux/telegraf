@@ -102,7 +102,7 @@ type DirectoryMonitor struct {
 
 	filesInUse          cmap.ConcurrentMap
 	Log                 telegraf.Logger
-	parser              parsers.Parser
+	parserFunc          parsers.ParserFunc
 	decoder             *encoding.Decoder
 	filesProcessed      selfstat.Stat
 	filesDropped        selfstat.Stat
@@ -270,6 +270,11 @@ func (monitor *DirectoryMonitor) readFileToMetrics(filePath string) ([]telegraf.
 	}
 	defer file.Close()
 
+	parser, err := monitor.parserFunc()
+	if err != nil {
+		return nil, fmt.Errorf("E! Creating parser: %s", err.Error())
+	}
+
 	// Handle gzipped files.
 	var reader io.Reader
 	if filepath.Ext(filePath) == ".gz" {
@@ -287,7 +292,7 @@ func (monitor *DirectoryMonitor) readFileToMetrics(filePath string) ([]telegraf.
 		return nil, fmt.Errorf("E! Error file: %v could not be read, %s", filePath, err)
 	}
 
-	return monitor.parser.Parse(fileContents)
+	return parser.Parse(fileContents)
 }
 
 func (monitor *DirectoryMonitor) moveFile(filePath string, directory string) {
@@ -324,8 +329,8 @@ func (monitor *DirectoryMonitor) isIgnoredFile(fileName string) bool {
 	return false
 }
 
-func (monitor *DirectoryMonitor) SetParser(p parsers.Parser) {
-	monitor.parser = p
+func (monitor *DirectoryMonitor) SetParserFunc(fn parsers.ParserFunc) {
+	monitor.parserFunc = fn
 }
 
 func (monitor *DirectoryMonitor) Gather(acc telegraf.Accumulator) error {
