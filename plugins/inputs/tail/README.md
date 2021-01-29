@@ -78,7 +78,7 @@ The plugin expects messages in one of the
     #invert_match = false
 
     #After the specified timeout, this plugin sends the multiline event even if no new pattern is found to start a new event. The default is 5s.
-    #timeout = 5s
+    #timeout = "5s"
 ```
 
 ### Metrics
