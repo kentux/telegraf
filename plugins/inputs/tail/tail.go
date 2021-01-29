@@ -134,7 +134,7 @@ const sampleConfig = `
 
     ## After the specified timeout, this plugin sends a multiline event even if no new pattern
 	## is found to start a new event. The default timeout is 5s.
-    #timeout = 5s
+    #timeout = "5s"
 `
 
 func (t *Tail) SampleConfig() string {
